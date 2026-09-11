@@ -16,27 +16,28 @@ router.get("/", async (req, res, next) => {
   try {
     const { search, sort } = req.query;
 
-    // Loads EVERY thread into memory, every request. 🚫
-    let threads = await prisma.thread.findMany({
+    const where = search
+      ? {
+          title: {
+            contains: search,
+            mode: "insensitive",
+          },
+        }
+      : {};
+
+    const orderBy =
+      sort === "oldest"
+        ? { createdAt: "asc" }
+        : { createdAt: "desc" };
+
+    const threads = await prisma.thread.findMany({
+      where,
+      orderBy,
       include: {
         author: { select: { name: true, avatarUrl: true } },
         _count: { select: { comments: true } },
       },
     });
-
-    // TODO: remove this in-memory filter — build a Prisma `where` instead.
-    if (search) {
-      threads = threads.filter((t) =>
-        t.title.toLowerCase().includes(String(search).toLowerCase())
-      );
-    }
-
-    // TODO: remove this in-memory sort — build a Prisma `orderBy` instead.
-    if (sort === "oldest") {
-      threads.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    } else {
-      threads.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
 
     res.json({ threads });
   } catch (error) {
