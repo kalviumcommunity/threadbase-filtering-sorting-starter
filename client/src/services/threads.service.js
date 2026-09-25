@@ -1,10 +1,11 @@
-import apiClient from "./apiClient";
+import axios from "axios";
 
-// Passes the filter values as query params. Axios turns { search, sort }
-// into  ?search=...&sort=...  — visible in the Network tab.
-export async function getThreads({ search, sort }) {
-  const res = await apiClient.get("/api/threads", {
-    params: { search, sort },
+export const getThreads = async (page = 1) => {
+  const res = await axios.get("/api/threads", {
+    params: {
+      page,
+    },
   });
-  return res.data.threads;
-}
+
+  return res.data;
+};
