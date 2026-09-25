@@ -1,47 +1,63 @@
-import { Router } from "express";
-import prisma from "../prisma/client.js";
+const express = require("express");
+const prisma = require("../prisma/client");
 
-const router = Router();
+const router = express.Router();
 
-// ─────────────────────────────────────────────────────────────
-// GET /api/threads?search=<term>&sort=<newest|oldest>
-//
-// ⚠️  THIS IS THE STARTER (BROKEN) VERSION.
-// It reads req.query correctly, but it filters and sorts an
-// IN-MEMORY ARRAY with JavaScript after loading every row.
-// Your job: replace the array logic with a real Prisma
-// `where` + `orderBy` so the DATABASE does the filtering.
-// ─────────────────────────────────────────────────────────────
-router.get("/", async (req, res, next) => {
-  try {
-    const { search, sort } = req.query;
+router.get("/threads", async (req, res) => {
+  const { search, sort } = req.query;
 
-    // Loads EVERY thread into memory, every request. 🚫
-    let threads = await prisma.thread.findMany({
+  const page = Number(req.query.page) || 1;
+  const pageSize = 10;
+
+  const skip = (page - 1) * pageSize;
+  const take = pageSize;
+
+  const where = search
+    ? {
+        title: {
+          contains: search,
+          mode: "insensitive",
+        },
+      }
+    : {};
+
+  const orderBy = {
+    createdAt: sort === "oldest" ? "asc" : "desc",
+  };
+
+  const [threads, total] = await Promise.all([
+    prisma.thread.findMany({
+      where,
+      orderBy,
+      skip,
+      take,
       include: {
-        author: { select: { name: true, avatarUrl: true } },
-        _count: { select: { comments: true } },
+        author: {
+          select: {
+            name: true,
+            avatarUrl: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: true,
+          },
+        },
       },
-    });
+    }),
 
-    // TODO: remove this in-memory filter — build a Prisma `where` instead.
-    if (search) {
-      threads = threads.filter((t) =>
-        t.title.toLowerCase().includes(String(search).toLowerCase())
-      );
-    }
+    prisma.thread.count({
+      where,
+    }),
+  ]);
 
-    // TODO: remove this in-memory sort — build a Prisma `orderBy` instead.
-    if (sort === "oldest") {
-      threads.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    } else {
-      threads.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
+  const hasMore = total > page * pageSize;
 
-    res.json({ threads });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    threads,
+    total,
+    hasMore,
+  });
 });
 
-export default router;
+module.exports = router;
